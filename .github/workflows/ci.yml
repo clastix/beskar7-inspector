@@ -10,6 +10,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # The clastix fork pins the contract to clastix/beskar7, which carries v4.3 before upstream.
+  BESKAR7_CONTRACT_REPO: https://github.com/clastix/beskar7
 
 jobs:
   rust:
@@ -106,12 +108,12 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 --branch "${{ steps.pin.outputs.ref }}" \
-            https://github.com/projectbeskar/beskar7 beskar7-upstream
+            "${BESKAR7_CONTRACT_REPO}" beskar7-upstream
 
       - name: Diff vendored fixtures against beskar7 (byte-exact; any delta fails)
         run: |
           set -euo pipefail
-          for f in VERSION golden_inspection_report.json golden_boot_cmdline.txt golden_provider_id_artifact.json; do
+          for f in VERSION golden_inspection_report.json golden_boot_cmdline.txt golden_provider_id_artifact.json golden_network_data_artifact.json; do
             echo "::group::diff $f"
             diff "beskar7-upstream/test/contract/$f" "test/contract/$f"
             echo "::endgroup::"
