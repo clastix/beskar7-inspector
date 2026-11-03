@@ -14,10 +14,8 @@ name: Release
 #   2. Publishes contract-version.txt and tags the image `contract-<version>`,
 #      so pairing is discoverable without reading release notes.
 
+# The clastix fork releases by hand only: run it on a tag with dry_run=false to publish.
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -30,6 +28,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # The clastix fork pins the contract to clastix/beskar7, which carries v4.3 before upstream.
+  BESKAR7_CONTRACT_REPO: https://github.com/clastix/beskar7
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -46,6 +46,13 @@ jobs:
       contract_version: ${{ steps.contract.outputs.version }}
       contract_ref: ${{ steps.contract.outputs.ref }}
     steps:
+      # A publish run names the image and the release after the ref, so it must be a tag.
+      - name: Require a tag ref to publish
+        if: ${{ !inputs.dry_run && github.ref_type != 'tag' }}
+        run: |
+          echo "::error::publish runs need a tag ref (--ref v...), not ${{ github.ref_name }}"
+          exit 1
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install Rust toolchain (stable + rustfmt + clippy)
@@ -83,9 +90,9 @@ jobs:
           set -euo pipefail
           ref='${{ steps.contract.outputs.ref }}'
           git clone --depth 1 --branch "$ref" \
-            https://github.com/projectbeskar/beskar7 beskar7-upstream
+            "${BESKAR7_CONTRACT_REPO}" beskar7-upstream
           rc=0
-          for f in VERSION golden_inspection_report.json golden_boot_cmdline.txt golden_provider_id_artifact.json; do
+          for f in VERSION golden_inspection_report.json golden_boot_cmdline.txt golden_provider_id_artifact.json golden_network_data_artifact.json; do
             if diff -u "beskar7-upstream/test/contract/$f" "test/contract/$f" > "/tmp/diff-$f" 2>&1; then
               echo "  IDENTICAL  $f"
             else
@@ -267,7 +274,7 @@ jobs:
           cat release-notes.md
 
       - name: Create GitHub Release
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
